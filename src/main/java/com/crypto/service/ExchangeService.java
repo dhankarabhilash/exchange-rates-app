@@ -4,6 +4,7 @@ import com.crypto.model.ExchangeResponseData;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.asynchttpclient.*;
+import com.crypto.model.ResponseModel;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
 
@@ -13,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -55,7 +57,7 @@ public class ExchangeService {
             String url = EXCHANGES_URL + exchange + "/ticker";
             LOGGER.log(Level.INFO, url);
             BoundRequestBuilder tempBuilder = asyncHttpClient.prepareGet(url);
-            exchangeToBoundRequestBuilderMap.putIfAbsent(exchange, tempBuilder);
+            exchangeToBoundRequestBuilderMap.putIfAbsent(exchange.toLowerCase(), tempBuilder);
         }
 
         sw.stop();
@@ -64,21 +66,18 @@ public class ExchangeService {
 
     @PostConstruct
     private void init() {
-        final long timeInterval = 50000;
-        Runnable runnable = new Runnable() {
-            public void run() {
-                while (true) {
-                    refreshExchangeRates();
-                    try {
-                        Thread.sleep(timeInterval);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+        final long timeInterval = 30000;
+
+        new Thread(() -> {
+            while (true) {
+                refreshExchangeRates();
+                try {
+                    Thread.sleep(timeInterval);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             }
-        };
-        Thread thread = new Thread(runnable);
-        thread.start();
+        }).start();
     }
 
     private void refreshExchangeRates() {
@@ -103,9 +102,10 @@ public class ExchangeService {
                 LOGGER.log(Level.SEVERE, e.getMessage());
                 e.getStackTrace();
             }
-            exchangeToExchangeRatesMap.putIfAbsent(exchangeBuilder.getKey(), new HashMap<>());
+            exchangeToExchangeRatesMap.putIfAbsent(exchangeBuilder.getKey().toLowerCase(), new HashMap<>());
             for (ExchangeResponseData exchangeResponseData : exchangeResponseDataList) {
-                exchangeToExchangeRatesMap.get(exchangeBuilder.getKey()).putIfAbsent(exchangeResponseData.getSymbol(),
+                exchangeToExchangeRatesMap.get(exchangeBuilder.getKey().toLowerCase())
+                        .putIfAbsent(exchangeResponseData.getSymbol().toLowerCase(),
                         exchangeResponseData);
             }
         }
@@ -113,21 +113,31 @@ public class ExchangeService {
         LOGGER.log(Level.INFO, "refreshExchangeRates Took " + sw.getTotalTimeMillis() + " ms");
     }
 
-    public BigDecimal fetchExchangeRate(String exchangeName, String fromCurrency, String toCurrency) {
+    public ResponseModel fetchExchangeRate(String exchangeName, String fromCurrency, String toCurrency) {
         StopWatch sw = new StopWatch();
         sw.start();
+        ResponseModel responseModel = new ResponseModel();
 
-        if (!exchangeToExchangeRatesMap.containsKey(exchangeName.toLowerCase())) {
-            return BigDecimal.ZERO;
+        if (!exchangeToExchangeRatesMap.containsKey(exchangeName)) {
+            responseModel.setErrorResponse("Exchange Name not present");
+            return responseModel;
         }
-        Double fromCurrRate =
-                exchangeToExchangeRatesMap.get(exchangeName.toLowerCase()).get(fromCurrency.toUpperCase()).getPriceUsd();
-        Double toCurrRate = exchangeToExchangeRatesMap.get(exchangeName.toLowerCase()).get(toCurrency.toUpperCase()).getPriceUsd();
 
+        Long currentTime = new Date().getTime();
+        Long lastModified = exchangeToExchangeRatesMap.get(exchangeName).get(fromCurrency).getLastUpdated().getTime();
+
+        if(currentTime - lastModified > 60000) {
+            responseModel.setErrorResponse("Exchange Rate is not up-to-date. Please try again after sometime");
+            return responseModel;
+        }
+
+        Double fromCurrRate = exchangeToExchangeRatesMap.get(exchangeName).get(fromCurrency).getPriceUsd();
+        Double toCurrRate = exchangeToExchangeRatesMap.get(exchangeName).get(toCurrency).getPriceUsd();
+        responseModel.setRate(fromCurrRate/toCurrRate);
         sw.stop();
         LOGGER.log(Level.INFO, "fetchExchangeRate Took " + sw.getTotalTimeMillis() + " ms");
 
-        return BigDecimal.valueOf(fromCurrRate / toCurrRate);
+        return responseModel;
     }
 
 }

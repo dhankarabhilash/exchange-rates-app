@@ -1,3 +1,5 @@
+# exchange-rates-app
+=======
 # Exchange Rates Finder
 
 ## Introduction
@@ -37,5 +39,3 @@ Result will be
 ```json
 39.99280129576676
 ```
-
----
