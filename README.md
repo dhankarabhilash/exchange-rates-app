@@ -4,7 +4,7 @@
 
 ## Introduction
 
-Exchange provides exchange rate between two currencies in BigDecimal
+Exchange provides exchange rate between two currencies in Double
 
 ## Build and Deploy
 
@@ -17,10 +17,10 @@ Exchange provides exchange rate between two currencies in BigDecimal
 #### Build Application
 ```sh
 # Change directory to Project Directory
-cd D:\Projects\Exchange
+cd /Users/abhilashdhankar/Exchange
 
 # build command
-gradlew clean build
+gradle clean build
 ```
 
 #### Deploy Application
@@ -33,9 +33,17 @@ java -jar build/libs/Exchange-1.0-SNAPSHOT.jar
 ## Access URL
 
 ```sh
+API Endpoint: 
 http://localhost:8080/getExchangeRate/KUCOIN?fromCurrency=BTC&toCurrency=ETH&format=json
+
+curl request: 
+curl --location --request GET 'http://localhost:8080/getExchangeRate/kucoin?fromCurrency=btc&toCurrency=eth'
 ```
-Result will be
+Response:
 ```json
 39.99280129576676
+{
+    "rate": 39.99280129576676,
+    "errorResponse": null
+}
 ```
