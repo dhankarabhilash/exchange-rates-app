@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StopWatch;
 
 import javax.annotation.PostConstruct;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,11 +21,10 @@ import java.util.logging.Logger;
 @Service
 public class ExchangeService {
 
-    private Map<String, Map<String, ExchangeResponseData>> exchangeToExchangeRatesMap;
-    private final Map<String, BoundRequestBuilder> exchangeToBoundRequestBuilderMap;
+    private Map<String, Map<String, ExchangeResponseData>> exchangeToExchangeRatesMap = new HashMap<>();
+    private Map<String, BoundRequestBuilder> exchangeToBoundRequestBuilderMap = new HashMap<>();
 
     private static final String EXCHANGES_URL = "https://dev-api.shrimpy.io/v1/exchanges/";
-    //private static final String URL = "https://dev-api.shrimpy.io/v1/exchanges/kucoin/ticker";
 
     private static final Logger LOGGER = Logger.getLogger(Logger.GLOBAL_LOGGER_NAME);
 
@@ -46,13 +44,12 @@ public class ExchangeService {
                     new TypeToken<List<String>>() {
                     }.getType()
             );
-            LOGGER.log(Level.INFO, String.format("Got " + exchangeList.size() + " data from API"));
+            LOGGER.log(Level.INFO, "Got " + exchangeList.size() + " data from API");
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, e.getMessage());
             e.getStackTrace();
         }
 
-        exchangeToBoundRequestBuilderMap = new HashMap<>();
         for (String exchange : exchangeList) {
             String url = EXCHANGES_URL + exchange + "/ticker";
             LOGGER.log(Level.INFO, url);
@@ -83,7 +80,6 @@ public class ExchangeService {
     private void refreshExchangeRates() {
         StopWatch sw = new StopWatch();
         sw.start();
-        exchangeToExchangeRatesMap = new HashMap<>();
 
         for (Map.Entry<String, BoundRequestBuilder> exchangeBuilder : exchangeToBoundRequestBuilderMap.entrySet()) {
             Future<Response> response = exchangeBuilder.getValue().execute();
@@ -96,8 +92,8 @@ public class ExchangeService {
                         }.getType()
                 );
                 LOGGER.log(Level.INFO,
-                        String.format("Got " + exchangeBuilder.getKey() + " " + exchangeResponseDataList.size() + " " +
-                                "data from API"));
+                        "Got " + exchangeBuilder.getKey() + " " + exchangeResponseDataList.size() + " " +
+                                "data from API");
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, e.getMessage());
                 e.getStackTrace();
@@ -123,21 +119,36 @@ public class ExchangeService {
             return responseModel;
         }
 
+        Long lastModified = null;
+        Double fromCurrRate = null, toCurrRate = null;
+
         Long currentTime = new Date().getTime();
-        Long lastModified = exchangeToExchangeRatesMap.get(exchangeName).get(fromCurrency).getLastUpdated().getTime();
+        if(Objects.nonNull(exchangeToExchangeRatesMap.get(exchangeName).get(fromCurrency))) {
+            lastModified = exchangeToExchangeRatesMap.get(exchangeName).get(fromCurrency).getLastUpdated().getTime();
+            fromCurrRate = exchangeToExchangeRatesMap.get(exchangeName).get(fromCurrency).getPriceUsd();
+        } else {
+            responseModel.setErrorResponse("From Currency not found.");
+        }
+        LOGGER.log(Level.INFO, "Current Time: " + new Date(currentTime));
+        LOGGER.log(Level.INFO, "Last Modified Time of Crypto Exchange: " + new Date(lastModified));
 
         if(currentTime - lastModified > 60000) {
             responseModel.setErrorResponse("Exchange Rate is not up-to-date. Please try again after sometime");
             return responseModel;
         }
 
-        Double fromCurrRate = exchangeToExchangeRatesMap.get(exchangeName).get(fromCurrency).getPriceUsd();
-        Double toCurrRate = exchangeToExchangeRatesMap.get(exchangeName).get(toCurrency).getPriceUsd();
+        if(Objects.nonNull(exchangeToExchangeRatesMap.get(exchangeName).get(toCurrency))) {
+            toCurrRate = exchangeToExchangeRatesMap.get(exchangeName).get(toCurrency).getPriceUsd();
+        } else {
+            responseModel.setErrorResponse("To Currency not found.");
+        }
+
         responseModel.setRate(fromCurrRate/toCurrRate);
         sw.stop();
         LOGGER.log(Level.INFO, "fetchExchangeRate Took " + sw.getTotalTimeMillis() + " ms");
 
         return responseModel;
+
     }
 
 }
